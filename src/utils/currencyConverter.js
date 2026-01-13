@@ -25,7 +25,7 @@ export async function fetchExchangeRates(url) {
                 USD: 1,
                 ILS: data.rates.ILS || 3.4,
                 GBP: data.rates.GBP || 0.6,
-                EURO: data.rates.EUR || 0.7
+                EURO: data.rates.EURO || 0.7
             };
         }
         
