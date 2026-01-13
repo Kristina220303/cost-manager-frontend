@@ -1,18 +1,29 @@
+/* Global styles applied to the entire application */
 body {
+  /* Remove default browser margin */
   margin: 0;
+
+  /* Define default font stack for the application */
+
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
+  /* Improve font rendering on different browsers */
+
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+   /* Set global background color */
   background-color: #FAFAF7;
 }
 
+/* Default font styling for code elements */
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
 
+/* Apply box-sizing globally for consistent layout behavior */
 * {
   box-sizing: border-box;
 }
