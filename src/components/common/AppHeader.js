@@ -1,7 +1,8 @@
 import React from 'react';
 import { AppBar, Toolbar, Typography } from '@mui/material';
-// Application header component with centered title
-// Displays main application name with elegant serif typography
+
+// Header component of the application
+// Responsible only for displaying the application title
 function AppHeader() {
     return (
         <AppBar 
@@ -13,14 +14,15 @@ function AppHeader() {
                 color: '#43302E'
             }}
         >
+            {/* Toolbar is used to align and center the header content */}
             <Toolbar 
                 sx={{ 
                     minHeight: { xs: 64, sm: 64 },
                     justifyContent: 'center'
                 }}
             >
-                {/* Centered app title with elegant serif font */}
-                {/* Uses Playfair Display for premium brand appearance */}
+                {/* Application title text */}
+                {/* Typography component is used for consistent text styling */}
                 <Typography 
                     variant="h4" 
                     component="div" 
@@ -40,5 +42,7 @@ function AppHeader() {
     );
 }
 
+// Export header component for use in App.js
 export default AppHeader;
+
 
