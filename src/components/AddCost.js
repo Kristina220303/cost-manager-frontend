@@ -31,20 +31,12 @@ function AddCost({ db, onCostAdded }) {
     const [sum, setSum] = useState('');
     const [currency, setCurrency] = useState('USD');
     const [category, setCategory] = useState('Food');
-    // State for date selection - year, month, and day
-    // Allows users to specify when the expense occurred
-    const [year, setYear] = useState(new Date().getFullYear());
-    const [month, setMonth] = useState(new Date().getMonth() + 1);
-    const [day, setDay] = useState(new Date().getDate());
     const [description, setDescription] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    const months = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-    ];
+   
 
     // Handles form submission with input validation and async database save
     // Validates sum is positive number and description is not empty
@@ -66,16 +58,12 @@ function AddCost({ db, onCostAdded }) {
         setLoading(true);
         
         try {
-            // Construct cost item object with validated user input and selected date
-            // Includes year, month, and day for proper expense tracking
+            // Construct cost item object with validated user input
             const costItem = {
                 sum: sumValue,
                 currency: currency,
                 category: category,
                 description: description.trim(),
-                year: year,
-                month: month,
-                day: day
             };
             
             await db.addCost(costItem);
@@ -170,49 +158,6 @@ function AddCost({ db, onCostAdded }) {
                     })}
                 </TextField>
                 
-                {/* Date selection fields for year, month, and day */}
-                {/* Allows users to specify when the expense occurred */}
-                <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                    <TextField
-                        label="Year"
-                        type="number"
-                        value={year}
-                        onChange={(e) => setYear(parseInt(e.target.value))}
-                        inputProps={{ min: 2000, max: 2100 }}
-                        required
-                        sx={{ flex: 1 }}
-                        helperText="Year"
-                    />
-                    
-                    <TextField
-                        select
-                        label="Month"
-                        value={month}
-                        onChange={(e) => setMonth(parseInt(e.target.value))}
-                        required
-                        sx={{ flex: 2 }}
-                        helperText="Month"
-                    >
-                        {months.map(function(monthName, index) {
-                            return (
-                                <MenuItem key={index + 1} value={index + 1}>
-                                    {monthName}
-                                </MenuItem>
-                            );
-                        })}
-                    </TextField>
-                    
-                    <TextField
-                        label="Day"
-                        type="number"
-                        value={day}
-                        onChange={(e) => setDay(parseInt(e.target.value))}
-                        inputProps={{ min: 1, max: 31 }}
-                        required
-                        sx={{ flex: 1 }}
-                        helperText="Day"
-                    />
-                </Box>
                 
                 <TextField
                     fullWidth
