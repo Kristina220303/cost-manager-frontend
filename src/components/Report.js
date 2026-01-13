@@ -13,11 +13,10 @@ import {
     TableRow,
     Alert,
     CircularProgress,
-    Paper,
     Chip
 } from '@mui/material';
 import { SUPPORTED_CURRENCIES } from '../utils/currencyConverter';
-import { fetchExchangeRates, convertCurrency, getExchangeRateURL } from '../utils/currencyConverter';
+import { fetchExchangeRates, getExchangeRateURL } from '../utils/currencyConverter';
 import PageLayout from './common/PageLayout';
 import PrimaryCard from './common/PrimaryCard';
 
@@ -54,7 +53,7 @@ function Report({ db }) {
         if (originalCosts && exchangeRates && reportYear !== null && reportMonth !== null) {
             async function recalculateReport() {
                 try {
-                    const reportData = await db.getReport(reportYear, reportMonth, currency, exchangeRates);
+                    const reportData = await db.getReport(reportYear, reportMonth, currency);
                     setReport(reportData);
                 } catch (err) {
                     console.error('Failed to recalculate report:', err);
@@ -77,7 +76,7 @@ function Report({ db }) {
         
         try {
             // getReport now handles currency conversion internally
-            const reportData = await db.getReport(year, month, currency, exchangeRates);
+            const reportData = await db.getReport(year, month, currency);
             setOriginalCosts(reportData.costs);
             setReportYear(year);
             setReportMonth(month);
