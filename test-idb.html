@@ -25,12 +25,11 @@
          console.log("adding 2nd cost item succeeded");
        }
        
-       // Test getReport with exchange rates
-       const exchangeRates = {USD: 1, GBP: 0.6, EURO: 0.7, ILS: 3.4};
+       
        const now = new Date();
        const year = now.getFullYear();
        const month = now.getMonth() + 1;
-       const report = await db.getReport(year, month, "USD", exchangeRates);
+       const report = await db.getReport(year, month, "USD");
        if(report) {
          console.log("getting report succeeded");
          console.log("Report:", report);
