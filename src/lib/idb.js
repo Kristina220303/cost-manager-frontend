@@ -1,25 +1,53 @@
-// Opens IndexedDB database and returns promise with database wrapper object
-// Creates database schema on first run with object store and indexes
+import { getExchangeRateURL } from '../utils/currencyConverter';
+
+/**
+ * Opens IndexedDB database and returns a Promise that resolves to a wrapper API.
+ * Wrapper provides addCost() and getReport() methods required by the project spec.
+ */
 export function openCostsDB(databaseName, databaseVersion) {
     return new Promise(function(resolve, reject) {
         const request = indexedDB.open(databaseName, databaseVersion);
 
+        // Handle database open failure
         request.onerror = function() {
             reject(new Error('Failed to open database: ' + request.error));
         };
 
-        // Returns database wrapper with methods for cost operations
-        // Provides interface for adding costs and querying by date/category
+        // Create schema on first run / version upgrade
+        request.onupgradeneeded = function(event) {
+            const db = event.target.result;
+
+            // Create object store only once
+            if (!db.objectStoreNames.contains('costs')) {
+                const store = db.createObjectStore('costs', {
+                    keyPath: 'id',
+                    autoIncrement: true
+                });
+
+                // Indexes used for efficient date-based queries
+                store.createIndex('year', 'year', { unique: false });
+                store.createIndex('month', 'month', { unique: false });
+                store.createIndex('yearMonth', ['year', 'month'], { unique: false });
+                store.createIndex('category', 'category', { unique: false });
+            }
+        };
+
+        // Resolve with wrapper API on success
         request.onsuccess = function() {
             const db = request.result;
+
             resolve({
-                db: db,
+                // Add new cost item into database
                 addCost: function(cost) {
                     return addCost(db, cost);
                 },
-                getReport: function(year, month, currency, exchangeRates) {
-                    return getReport(db, year, month, currency, exchangeRates);
+
+                // Get monthly report in requested currency (3 params required)
+                getReport: function(year, month, currency) {
+                    return getReport(db, year, month, currency);
                 },
+
+                // Extra helpers (allowed by project Q&A)
                 getAllCosts: function() {
                     return getAllCosts(db);
                 },
@@ -31,69 +59,47 @@ export function openCostsDB(databaseName, databaseVersion) {
                 }
             });
         };
-
-        // Creates database schema on first initialization
-        // Sets up object store with auto-increment ID and indexes for queries
-        request.onupgradeneeded = function(event) {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains('costs')) {
-                const objectStore = db.createObjectStore('costs', {
-                    keyPath: 'id',
-                    autoIncrement: true
-                });
-                objectStore.createIndex('year', 'year', { unique: false });
-                objectStore.createIndex('month', 'month', { unique: false });
-                objectStore.createIndex('yearMonth', ['year', 'month'], { unique: false });
-                objectStore.createIndex('category', 'category', { unique: false });
-            }
-        };
     });
 }
 
-// Adds new cost item to database with validation and date handling
-// Uses provided date or falls back to current date if not specified
+/**
+ * Adds a new cost item. Uses current date (as required by spec).
+ * Resolves with an object containing sum/currency/category/description only.
+ */
 function addCost(db, cost) {
     return new Promise(function(resolve, reject) {
-        // Validates cost object has required fields with correct types
-        // Ensures data integrity before database insertion
-        if (!cost || typeof cost.sum !== 'number' || 
-            typeof cost.currency !== 'string' || 
-            typeof cost.category !== 'string' || 
+        // Validate required fields and types
+        if (!cost || typeof cost.sum !== 'number' ||
+            typeof cost.currency !== 'string' ||
+            typeof cost.category !== 'string' ||
             typeof cost.description !== 'string') {
             reject(new Error('Invalid cost object. Must have sum (number), currency (string), category (string), and description (string)'));
             return;
         }
 
-        const transaction = db.transaction(['costs'], 'readwrite');
-        const objectStore = transaction.objectStore('costs');
+        const tx = db.transaction(['costs'], 'readwrite');
+        const store = tx.objectStore('costs');
 
-        // Uses provided date or current date as fallback
-        // Extracts day, month, and year for database storage
+        // Date attached is the date the item was added
         const now = new Date();
-        const day = cost.day !== undefined ? cost.day : now.getDate();
-        const month = cost.month !== undefined ? cost.month : (now.getMonth() + 1);
-        const year = cost.year !== undefined ? cost.year : now.getFullYear();
-
         const costItem = {
             sum: cost.sum,
             currency: cost.currency,
             category: cost.category,
             description: cost.description,
-            year: year,
-            month: month,
-            Date: {
-                day: day
-            }
+            year: now.getFullYear(),
+            month: now.getMonth() + 1,
+            Date: { day: now.getDate() }
         };
-        
-        const request = objectStore.add(costItem);
-        
+
+        const request = store.add(costItem);
+
+        // Handle insertion error
         request.onerror = function() {
             reject(new Error('Failed to add cost: ' + request.error));
         };
-        
-        // Returns added cost item without database ID
-        // Provides confirmation of successful insertion
+
+        // Resolve with required returned object (without id/date)
         request.onsuccess = function() {
             resolve({
                 sum: costItem.sum,
@@ -105,142 +111,170 @@ function addCost(db, cost) {
     });
 }
 
-// Converts currency amount using exchange rates
-// Helper function for currency conversion in getReport
-function convertCurrency(amount, fromCurrency, toCurrency, exchangeRates) {
+/**
+ * Fetch exchange rates from configured URL (or default via currencyConverter utils).
+ * Expects JSON like: { "USD":1, "GBP":0.6, "EURO":0.7, "ILS":3.4 }
+ */
+function fetchExchangeRates() {
+    const url = getExchangeRateURL();
+
+    return fetch(url).then(function(response) {
+        if (!response.ok) {
+            throw new Error('Failed to fetch exchange rates: HTTP ' + response.status);
+        }
+        return response.json();
+    }).then(function(rates) {
+        // Basic validation for supported currencies
+        const required = ['USD', 'ILS', 'GBP', 'EURO'];
+        required.forEach(function(code) {
+            if (typeof rates[code] !== 'number') {
+                throw new Error('Exchange rates JSON missing: ' + code);
+            }
+        });
+        return rates;
+    });
+}
+
+
+/**
+ * Currency conversion helper (USD base).
+ * Returns rounded value with 2 decimals.
+ */
+function convertCurrency(amount, fromCurrency, toCurrency, rates) {
     if (fromCurrency === toCurrency) {
         return amount;
     }
-    const fromRate = exchangeRates[fromCurrency] || 1;
-    const toRate = exchangeRates[toCurrency] || 1;
+
+    const fromRate = rates[fromCurrency];
+    const toRate = rates[toCurrency];
+
+    // Fail fast if missing rate (supported: USD, ILS, GBP, EURO)
+    if (typeof fromRate !== 'number' || typeof toRate !== 'number') {
+        throw new Error('Unsupported currency in conversion');
+    }
+
     const amountInUSD = amount / fromRate;
-    const convertedAmount = amountInUSD * toRate;
-    return Math.round(convertedAmount * 100) / 100;
+    const converted = amountInUSD * toRate;
+    return Math.round(converted * 100) / 100;
 }
 
-// Retrieves monthly report with all costs for specified year and month
-// Converts all costs to the specified currency using exchange rates
-function getReport(db, year, month, currency, exchangeRates) {
+/**
+ * Returns report object: { year, month, costs: [...], total: {currency, total} }
+ * costs list keeps original currencies (like the example), total is in requested currency.
+ */
+function getReport(db, year, month, currency) {
     return new Promise(function(resolve, reject) {
-        // Validate exchange rates are provided
-        if (!exchangeRates || typeof exchangeRates !== 'object') {
-            reject(new Error('Exchange rates must be provided for currency conversion'));
-            return;
-        }
+        // Fetch rates first (required for conversion)
+        fetchExchangeRates().then(function(rates) {
 
-        const transaction = db.transaction(['costs'], 'readonly');
-        const objectStore = transaction.objectStore('costs');
-        const index = objectStore.index('yearMonth');
-        
-        // Queries costs matching exact year and month combination
-        // Uses composite index for optimal performance
-        const range = IDBKeyRange.only([year, month]);
-        const request = index.getAll(range);
-        
-        request.onerror = function() {
-            reject(new Error('Failed to get report: ' + request.error));
-        };
-        
-        // Transforms costs, converts to target currency, and calculates total
-        // Returns report object with converted costs array and total amount
-        request.onsuccess = function() {
-            const costs = request.result;
-            
-            // Convert each cost to the target currency
-            const reportCosts = costs.map(function(cost) {
-                const convertedSum = convertCurrency(
-                    cost.sum, 
-                    cost.currency, 
-                    currency, 
-                    exchangeRates
-                );
-                return {
-                    sum: convertedSum,
-                    currency: currency,
-                    category: cost.category,
-                    description: cost.description,
-                    Date: cost.Date
-                };
-            });
+            const tx = db.transaction(['costs'], 'readonly');
+            const store = tx.objectStore('costs');
+            const index = store.index('yearMonth');
 
-            // Calculate total sum of all converted costs
-            let total = 0;
-            reportCosts.forEach(function(cost) {
-                total += cost.sum;
-            });
-            
-            const report = {
-                year: year,
-                month: month,
-                costs: reportCosts,
-                total: {
-                    currency: currency,
-                    total: Math.round(total * 100) / 100
-                }
+            // Query by composite index [year, month]
+            const range = IDBKeyRange.only([year, month]);
+            const request = index.getAll(range);
+
+            request.onerror = function() {
+                reject(new Error('Failed to get report: ' + request.error));
             };
-            
-            resolve(report);
-        };
+
+            request.onsuccess = function() {
+                const costs = request.result || [];
+
+                // Keep original sums/currencies in returned costs array
+                const reportCosts = costs.map(function(c) {
+                    return {
+                        sum: c.sum,
+                        currency: c.currency,
+                        category: c.category,
+                        description: c.description,
+                        Date: c.Date
+                    };
+                });
+
+                // Compute total converted to requested currency
+                let total = 0;
+                reportCosts.forEach(function(c) {
+                    total += convertCurrency(c.sum, c.currency, currency, rates);
+                });
+
+                resolve({
+                    year: year,
+                    month: month,
+                    costs: reportCosts,
+                    total: {
+                        currency: currency,
+                        total: Math.round(total * 100) / 100
+                    }
+                });
+            };
+
+        }).catch(function(err) {
+            reject(err);
+        });
     });
 }
 
-// Retrieves all cost items from database without filtering
-// Used for comprehensive data retrieval and chart generation
+/**
+ * Helper: return all costs from DB.
+ */
 function getAllCosts(db) {
     return new Promise(function(resolve, reject) {
-        const transaction = db.transaction(['costs'], 'readonly');
-        const objectStore = transaction.objectStore('costs');
-        const request = objectStore.getAll();
-        
+        const tx = db.transaction(['costs'], 'readonly');
+        const store = tx.objectStore('costs');
+        const request = store.getAll();
+
         request.onerror = function() {
             reject(new Error('Failed to get costs: ' + request.error));
         };
-        
+
         request.onsuccess = function() {
-            resolve(request.result);
+            resolve(request.result || []);
         };
     });
 }
 
-// Retrieves costs filtered by specific year and month
-// Uses composite index for efficient date-based querying
+/**
+ * Helper: return costs for specific year and month.
+ */
 function getCostsByYearMonth(db, year, month) {
     return new Promise(function(resolve, reject) {
-        const transaction = db.transaction(['costs'], 'readonly');
-        const objectStore = transaction.objectStore('costs');
-        const index = objectStore.index('yearMonth');
-        
+        const tx = db.transaction(['costs'], 'readonly');
+        const store = tx.objectStore('costs');
+        const index = store.index('yearMonth');
+
         const range = IDBKeyRange.only([year, month]);
         const request = index.getAll(range);
-        
+
         request.onerror = function() {
             reject(new Error('Failed to get costs: ' + request.error));
         };
-        
+
         request.onsuccess = function() {
-            resolve(request.result);
+            resolve(request.result || []);
         };
     });
 }
 
-// Retrieves all costs for a specific year across all months
-// Used for bar chart generation showing monthly totals
+/**
+ * Helper: return costs for a specific year (all months).
+ */
 function getCostsByYear(db, year) {
     return new Promise(function(resolve, reject) {
-        const transaction = db.transaction(['costs'], 'readonly');
-        const objectStore = transaction.objectStore('costs');
-        const index = objectStore.index('year');
-        
+        const tx = db.transaction(['costs'], 'readonly');
+        const store = tx.objectStore('costs');
+        const index = store.index('year');
+
         const range = IDBKeyRange.only(year);
         const request = index.getAll(range);
-        
+
         request.onerror = function() {
             reject(new Error('Failed to get costs: ' + request.error));
         };
-        
+
         request.onsuccess = function() {
-            resolve(request.result);
+            resolve(request.result || []);
         };
     });
 }
-
