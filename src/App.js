@@ -7,7 +7,11 @@ import {
     Box,
     CircularProgress
 } from '@mui/material';
+
+// Import database initialization function
 import { openCostsDB } from './lib/idb';
+
+// Import application components
 import AppHeader from './components/common/AppHeader';
 import AddCost from './components/AddCost';
 import Report from './components/Report';
@@ -15,11 +19,11 @@ import PieChart from './components/PieChart';
 import BarChart from './components/BarChart';
 import Settings from './components/Settings';
 
+// IndexedDB configuration
 const DATABASE_NAME = 'CostManagerDB';
 const DATABASE_VERSION = 1;
 
-// Wrapper component for tab panel content
-// Manages visibility of tab content based on selected tab index
+// TabPanel component controls which tab content is visible
 function TabPanel(props) {
     const { children, value, index, ...other } = props;
 
@@ -27,10 +31,9 @@ function TabPanel(props) {
         <div
             role="tabpanel"
             hidden={value !== index}
-            id={`simple-tabpanel-${index}`}
-            aria-labelledby={`simple-tab-${index}`}
             {...other}
         >
+            {/* Render content only if the tab is active */}
             {value === index && (
                 <Box>
                     {children}
@@ -40,19 +43,20 @@ function TabPanel(props) {
     );
 }
 
-
-// Main application component with tab-based navigation
-// Manages database connection and coordinates all page components
+// Main application component
+// Manages database connection, navigation, and page rendering
 function App() {
-    // State for database instance, active tab, and refresh trigger
-    // Refresh key forces child components to reload when costs are added
+
+    // Holds reference to IndexedDB instance
     const [db, setDb] = useState(null);
+
+    // Controls currently selected tab
     const [tabValue, setTabValue] = useState(0);
+
+    // Used to trigger refresh of reports and charts
     const [refreshKey, setRefreshKey] = useState(0);
 
-
-    // Initializes IndexedDB connection on component mount
-    // Opens database and stores reference for child components
+    // Initialize IndexedDB when application loads
     useEffect(function() {
         async function initDB() {
             try {
@@ -65,26 +69,24 @@ function App() {
         initDB();
     }, []);
 
-    // Handles tab navigation when user clicks different tabs
-    // Updates active tab index to show corresponding content
+    // Handle tab change when user clicks a different tab
     const handleTabChange = function(event, newValue) {
         setTabValue(newValue);
     };
 
-    // Callback triggered when new cost is added
-    // Increments refresh key to force charts and reports to reload
+    // Called after a new cost item is added
+    // Forces dependent components to reload data
     const handleCostAdded = function() {
         setRefreshKey(function(prev) {
             return prev + 1;
         });
     };
 
-    // Show loading screen while database initializes
-    // Prevents rendering components before database is ready
+    // Display loading screen while database is not ready
     if (!db) {
         return (
             <Box sx={{ 
-                display: 'flex', 
+                display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -101,29 +103,23 @@ function App() {
 
     return (
         <Box sx={{ 
-            flexGrow: 1, 
+            flexGrow: 1,
             minHeight: '100vh',
             backgroundColor: '#FAFAF7'
         }}>
+            {/* Application header */}
             <AppHeader />
-            
-            {/* Navigation tabs container with pastel styling */}
-            {/* Provides access to all main application sections */}
+
+            {/* Navigation tabs for switching between pages */}
             <Box sx={{ 
                 backgroundColor: '#FFFFFF',
                 borderBottom: '1px solid rgba(193, 219, 232, 0.3)'
             }}>
                 <Container maxWidth="xl">
                     <Tabs 
-                        value={tabValue} 
-                        onChange={handleTabChange} 
+                        value={tabValue}
+                        onChange={handleTabChange}
                         aria-label="navigation tabs"
-                        sx={{
-                            '& .MuiTabs-indicator': {
-                                backgroundColor: '#FFF1B5',
-                                height: 3
-                            }
-                        }}
                     >
                         <Tab label="Add Cost" />
                         <Tab label="Report" />
@@ -133,25 +129,24 @@ function App() {
                     </Tabs>
                 </Container>
             </Box>
-            
-            {/* Conditionally render page components based on active tab */}
-            {/* Refresh key forces reload when new costs are added */}
+
+            {/* Render content based on selected tab */}
             <TabPanel value={tabValue} index={0}>
                 <AddCost db={db} onCostAdded={handleCostAdded} />
             </TabPanel>
-            
+
             <TabPanel value={tabValue} index={1}>
                 <Report db={db} key={refreshKey} />
             </TabPanel>
-            
+
             <TabPanel value={tabValue} index={2}>
                 <PieChart db={db} key={refreshKey} />
             </TabPanel>
-            
+
             <TabPanel value={tabValue} index={3}>
                 <BarChart db={db} key={refreshKey} />
             </TabPanel>
-            
+
             <TabPanel value={tabValue} index={4}>
                 <Settings />
             </TabPanel>
@@ -159,5 +154,5 @@ function App() {
     );
 }
 
+// Export main application component
 export default App;
-
